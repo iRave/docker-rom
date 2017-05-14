@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+# Simple ROM wrapper to run commands in an ROM docker container
+#
+# Author: Kyle Manna <kyle@kylemanna.com>
+#
+
+set -e
+
+# Override from environment
+
+ROM_IMAGE=${ROM_IMAGE:-irave/rom}
+ROM_ARGS=${ROM_ARGS:---rm -it}
+
+ROM_VOL=${ROM_VOL:-${PWD}}
+ROM_VOL=${ROM_VOL%/} # Trim trailing slash if needed
+ROM_VOL_ROM=${ROM_VOL_ROM:-$ROM_VOL/rom}
+ROM_VOL_ROM=${ROM_VOL_ROM%/} # Trim trailing slash if needed
+ROM_VOL_CCACHE=${ROM_VOL_CCACHE:-$ROM_VOL/ccache}
+ROM_VOL_CCACHE=${ROM_VOL_CCACHE%/} # Trim trailing slash if needed
+
+# Convenience function
+function rom_create_dir_if_needed {
+  directory=$1
+  msg="rom: Checking if $directory exists"
+  echo "$msg"
+  if [ ! -d "$directory" ]; then
+    echo "$msg - unexistent"
+    msg="Creating $directory"
+    echo "$msg"
+    mkdir -p $directory
+  fi
+  echo "$msg - ok"
+}
+
+# Create ROM_VOL_ROM
+rom_create_dir_if_needed $ROM_VOL_ROM
+rom_create_dir_if_needed $ROM_VOL_CCACHE
+
+uid=$(id -u)
+
+# Set uid and gid to match host current user as long as NOT root
+if [ $uid -ne "0" ]; then
+    ROM_HOST_ID_ARGS="-e USER_ID=$uid -e GROUP_ID=$(id -g)"
+fi
+
+if [ -S "$SSH_AUTH_SOCK" ]; then
+    SSH_AUTH_ARGS="-v $SSH_AUTH_SOCK:/tmp/ssh_auth -e SSH_AUTH_SOCK=/tmp/ssh_auth"
+fi
+
+echo ""
+
+docker run $ROM_ARGS $ROM_HOST_ID_ARGS $SSH_AUTH_ARGS $ROM_EXTRA_ARGS \
+    -v "$ROM_VOL_ROM:/rom" -v "$ROM_VOL_CCACHE:/tmp/ccache" \
+    $ROM_IMAGE $@
+# --user="$(id -u):$(id -g)" 
